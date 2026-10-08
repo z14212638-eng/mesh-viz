@@ -40,24 +40,25 @@ cmake --build cmake-cache --target meshviz-viewer -j 2
 
 ## 一次运行，一份结果
 
+直接用 ns-3 原生命令，`--enableMeshviz=1` 在仿真结束后自动打开这次结果：
+
 ```bash
 cd /path/to/ns-3.48
-# 默认：链形全无线 / STA 接 AP2 / TCP / 20 Mbps / 单流
-python3 contrib/meshviz/tools/run.py
+# 全无线星型，STA 接 AP1，TCP
+./ns3 run "mesh_test_obss_metrics --mode=1 --staAssoc=ap1 --trafficType=tcp --tcpStreams=1 --appRate=20Mbps --prewarm=1.2 --test=0.8 --enableMeshviz=1"
 
-# UDP + 链形混合回程
-python3 contrib/meshviz/tools/run.py -- --mode=6 --staAssoc=ap2 --trafficType=udp
+# 全无线链型，STA 接 AP2，UDP
+./ns3 run "mesh_test_obss_metrics --mode=5 --staAssoc=ap2 --trafficType=udp --tcpStreams=1 --appRate=20Mbps --prewarm=1.2 --test=0.8 --enableMeshviz=1"
 
-# 星形 + STA 接 AP1 + OBSS
-python3 contrib/meshviz/tools/run.py -- --mode=1 --staAssoc=ap1 \
-  --trafficType=tcp --enableObss=1 --obssRate=10Mbps --prewarm=3 --test=2
-
-# 已编译、无图形桌面；指定一个尚不存在的成果目录
-python3 contrib/meshviz/tools/run.py --no-build --no-gui --output /path/to/results/run01 \
-  -- --mode=5 --trafficType=udp --captureDuration=0.1
+# 无桌面环境：只保存结果
+./ns3 run "mesh_test_obss_metrics --mode=1 --staAssoc=ap1 --enableMeshviz=1 --openMeshviz=0"
 ```
 
-默认结果保存在 `ns-3.48/meshviz-results/<时间戳>/`，每次创建新目录，包含 `run.jsonl` 和原脚本的 `metrics.csv`。启动器直接以参数数组调用程序，不依赖 shell 字符串拼接。
+`mode=1/2/3/4` 为星型，两条回程分别是 无线/无线、有线/无线、无线/有线、有线/有线；`mode=5/6/7/8` 是对应的链型。正常桌面下关闭查看器后命令退出。
+
+开关默认关闭。启用后，结果自动保存到当前运行目录下 `meshviz-results/run-<时间戳>-<序号>/`，包含 `run.jsonl` 和 `metrics.csv`，重复运行不会覆盖之前的自动结果。可以通过 `--meshviz=路径/run.jsonl` 指定采集位置，通过 `--out=路径/metrics.csv` 指定 CSV。Qt 可用时，`./ns3 run` 的构建步骤会同时构建查看器；缺少 Qt 时仍能用 `--openMeshviz=0` 录制。
+
+之前的 `python3 contrib/meshviz/tools/run.py -- ...` 启动器仍可使用，但不是必需入口。
 
 也可以只跑 C++ 脚本，再随时打开结果：
 
@@ -70,7 +71,9 @@ python3 contrib/meshviz/tools/run.py --no-build --no-gui --output /path/to/resul
 
 | 参数 | 含义 |
 |---|---|
-| `--meshviz=FILE` | 开启记录；省略则完全不创建可视化记录，适合批量扫描 |
+| `--enableMeshviz=1` | 开启本次采集并自动打开查看器，默认关闭 |
+| `--openMeshviz=0` | 启用采集但不打开窗口，适合无桌面运行 |
+| `--meshviz=FILE` | 指定记录文件；不启用 enableMeshviz 时为仅采集模式。两者均省略则不记录，适合批量扫描 |
 | `--captureStart=SECONDS` | 详细捕获开始时刻，默认等于 `prewarm` |
 | `--captureDuration=SECONDS` | 默认 0.15 秒 |
 | `--maxPpdus=N` | 默认最多 100000 个 PPDU；触发后界面显示提示 |
@@ -135,6 +138,9 @@ Simulator::Destroy();               // viz 必须活到 Destroy() 之后
 ## 验证
 
 ```bash
+# 原生命令入口、自动输出目录和查看器启动验证
+python3 contrib/meshviz/test/cli-entry.py
+
 # 完整场景验证（无需启用 ns-3 的全套测试）
 python3 contrib/meshviz/test/integration.py --report /path/to/validation.json
 

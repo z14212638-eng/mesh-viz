@@ -43,6 +43,17 @@ class MeshvizHelper
                   Time captureEnd,
                   uint64_t maxPpdus = 100000);
     ~MeshvizHelper();
+    /** Create a unique directory for one run without replacing previous results.
+     * @param base Parent directory for generated results.
+     * @return Absolute path of the new directory.
+     */
+    static std::string CreateRunDirectory(const std::string& base = "meshviz-results");
+    /** Open the completed trace in the sibling build-tree viewer, without a shell.
+     * Waits until the viewer closes. Recording does not depend on Qt.
+     * @param file Completed JSONL trace path.
+     * @return Viewer exit status, or nonzero if unavailable or launch fails.
+     */
+    static int OpenViewer(const std::string& file);
     /** Register a physical node and all its existing interfaces.
      * @param node Installed node with devices and Internet stack.
      * @param name Stable display label, independent of interface MAC role.

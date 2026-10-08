@@ -17,6 +17,8 @@ if(MESHVIZ_BUILD_UI)
   endif()
   if(Qt6_FOUND OR Qt5_FOUND)
     add_subdirectory(ui)
+    # Building an instrumented simulation also makes its optional viewer available.
+    add_dependencies(${libmeshviz} meshviz-viewer)
   else()
     message(STATUS "meshviz: Qt Widgets unavailable; recorder only")
   endif()

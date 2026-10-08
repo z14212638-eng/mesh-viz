@@ -5,6 +5,7 @@
 #include "ns3/ipv4-header.h"
 #include "ns3/mobility-model.h"
 #include "ns3/simulator.h"
+#include "ns3/system-path.h"
 #include "ns3/tag.h"
 #include "ns3/tcp-header.h"
 #include "ns3/udp-header.h"
@@ -12,13 +13,105 @@
 #include "ns3/wifi-phy.h"
 
 #include <algorithm>
+#include <cerrno>
+#include <chrono>
 #include <cmath>
+#include <filesystem>
+#include <iostream>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 #include <iomanip>
 #include <limits>
 #include <sstream>
 
 namespace ns3
 {
+std::string
+MeshvizHelper::CreateRunDirectory(const std::string& base)
+{
+    namespace fs = std::filesystem;
+    fs::create_directories(base);
+    const auto stamp = std::chrono::duration_cast<std::chrono::microseconds>(
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
+    for (unsigned i = 0;; ++i)
+    {
+        const auto directory = fs::absolute(
+            fs::path(base) / ("run-" + std::to_string(stamp) + "-" + std::to_string(i)));
+        if (fs::create_directory(directory))
+        {
+            return directory.string();
+        }
+    }
+}
+
+int
+MeshvizHelper::OpenViewer(const std::string& file)
+{
+    namespace fs = std::filesystem;
+    fs::path viewer;
+    auto directory = fs::path(SystemPath::FindSelfDirectory());
+    while (!directory.empty())
+    {
+        auto candidate = directory / "contrib/meshviz/meshviz-viewer";
+#ifdef _WIN32
+        candidate += ".exe";
+#endif
+        if (fs::is_regular_file(candidate))
+        {
+            viewer = candidate;
+            break;
+        }
+        if (directory == directory.parent_path())
+        {
+            break;
+        }
+        directory = directory.parent_path();
+    }
+    if (viewer.empty())
+    {
+        std::cerr << "MeshViz: viewer unavailable. Build meshviz-viewer with Qt Widgets, "
+                     "or use --openMeshviz=0. Trace saved: "
+                  << file << std::endl;
+        return 2;
+    }
+    const auto executable = viewer.string();
+    const auto trace = fs::absolute(file).string();
+    std::cout << "MeshViz: opening " << trace << std::endl;
+#ifdef _WIN32
+    const auto status = _spawnl(_P_WAIT,
+                                executable.c_str(),
+                                executable.c_str(),
+                                trace.c_str(),
+                                static_cast<char*>(nullptr));
+    return status < 0 ? 2 : static_cast<int>(status);
+#else
+    const auto child = fork();
+    if (child < 0)
+    {
+        return 2;
+    }
+    if (child == 0)
+    {
+        execl(executable.c_str(), executable.c_str(), trace.c_str(), static_cast<char*>(nullptr));
+        _exit(127);
+    }
+    int status = 0;
+    while (waitpid(child, &status, 0) < 0)
+    {
+        if (errno != EINTR)
+        {
+            return 2;
+        }
+    }
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 2;
+#endif
+}
+
 namespace
 {
 class MeshvizPacketTag : public Tag

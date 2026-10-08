@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <map>
@@ -1299,7 +1300,8 @@ main(int argc, char* argv[])
   cmd.AddValue("enableAmpdu", "Enable BE A-MPDU aggregation", g_enableAmpdu);
   cmd.AddValue("enableAmsdu", "Enable BE A-MSDU aggregation", g_enableAmsdu);
   cmd.AddValue("enablePcap", "Enable PCAP", g_enablePcap);
-  cmd.AddValue("out", "Output CSV path", g_outCsv);
+  cmd.AddValue("out", "Output CSV path", Callback<bool, const std::string&>(
+      [](const std::string& value) { g_outCsv = value; return true; }));
   cmd.AddValue("useStaPos", "Use manual STA XY position override", g_useStaPosOverride);
   cmd.AddValue("staX", "Manual STA X (meters) when useStaPos=1", g_staX);
   cmd.AddValue("staY", "Manual STA Y (meters) when useStaPos=1", g_staY);
@@ -1320,11 +1322,18 @@ main(int argc, char* argv[])
   cmd.AddValue("obssSta2Y", "Second OBSS STA Y position", g_obssSta2Y);
   cmd.AddValue("hopRttProbeInterval", "Per-hop UDP RTT probe interval during the measurement window (s)", g_hopRttProbeInterval);
   cmd.AddValue("hopRttProbeSize", "Per-hop UDP RTT probe packet size in bytes", g_hopRttProbeSize);
+  bool enableMeshviz = false;
+  bool openMeshviz = true;
   std::string meshvizFile;
   double captureStart = -1.0;
   double captureDuration = 0.15;
   uint64_t maxPpdus = 100000;
-  cmd.AddValue("meshviz", "Single-run MeshViz JSONL output (empty disables capture)", meshvizFile);
+  cmd.AddValue("enableMeshviz", "Record this run and open MeshViz after simulation", enableMeshviz);
+  cmd.AddValue("openMeshviz", "Open the viewer when enableMeshviz=1; disable for headless runs", openMeshviz);
+  cmd.AddValue("meshviz", "Explicit MeshViz JSONL path; capture-only unless enableMeshviz=1",
+      Callback<bool, const std::string&>([&meshvizFile](const std::string& value) {
+        meshvizFile = value; return true;
+      }));
   cmd.AddValue("captureStart", "PPDU capture start in seconds; -1 uses prewarm", captureStart);
   cmd.AddValue("captureDuration", "Detailed PPDU capture duration in seconds", captureDuration);
   cmd.AddValue("maxPpdus", "Detailed PPDU cap; full-window metrics remain enabled", maxPpdus);
@@ -1332,6 +1341,18 @@ main(int argc, char* argv[])
   NS_ABORT_MSG_IF(g_prewarm < 0 || g_test <= 0 || g_hopRttProbeInterval <= 0 ||
                   g_tcpStreams == 0 || g_tcpStreams > 60000 ||
                   uint32_t(g_basePort) + g_tcpStreams > 65536, "Invalid time/flow arguments");
+
+  if (enableMeshviz)
+  {
+    if (meshvizFile.empty())
+    {
+      meshvizFile = (std::filesystem::path(MeshvizHelper::CreateRunDirectory()) / "run.jsonl").string();
+    }
+    const auto parent = std::filesystem::absolute(meshvizFile).parent_path();
+    std::filesystem::create_directories(parent);
+    if (g_outCsv == "mesh_test_2.csv") g_outCsv = (parent / "metrics.csv").string();
+    std::cout << "MeshViz result: " << std::filesystem::absolute(meshvizFile) << std::endl;
+  }
 
   const ModeConfig cfg = ResolveMode(g_mode);
 
@@ -1821,5 +1842,6 @@ main(int argc, char* argv[])
   Simulator::Destroy();
 
   CloseCsv();
+  if (enableMeshviz && openMeshviz) return MeshvizHelper::OpenViewer(meshvizFile);
   return 0;
 }

@@ -1,0 +1,1 @@
+PASS: ns3 star CLI, unique per-run outputs, completed trace before viewer, literal paths with spaces/metacharacters, disabled capture

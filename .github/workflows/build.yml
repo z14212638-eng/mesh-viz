@@ -22,6 +22,7 @@ jobs:
           QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=generic MESHVIZ_TEST_TRACE="$PWD/contrib/meshviz/doc/example.jsonl" "$RUNNER_TEMP/meshviz-ui-check/bin/meshviz-ui-test"
           ./ns3 run "mesh_test_obss_metrics --mode=5 --staAssoc=ap2 --trafficType=tcp --tcpStreams=1 --appRate=1Gbps --prewarm=1.5 --test=0.5 --captureDuration=0.06 --meshviz=$RUNNER_TEMP/aggregate.jsonl --out=$RUNNER_TEMP/aggregate.csv"
           QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=generic MESHVIZ_TEST_TRACE="$RUNNER_TEMP/aggregate.jsonl" "$RUNNER_TEMP/meshviz-ui-check/bin/meshviz-ui-test" aggregateSelection
+          python3 contrib/meshviz/test/cli-entry.py
           ./test.py --no-build -s meshviz
           python3 contrib/meshviz/test/integration.py --report validation.json
           QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=generic ./build/contrib/meshviz/meshviz-viewer contrib/meshviz/doc/example.jsonl --export figures
