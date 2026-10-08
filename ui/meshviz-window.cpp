@@ -70,6 +70,24 @@ row(QTableWidget* t, const QStringList& vals)
 class TopologyView : public QGraphicsView
 {
   protected:
+    void wheelEvent(QWheelEvent* event) override
+    {
+        const double factor = event->angleDelta().y() > 0 ? 1.15 : 1 / 1.15;
+        if ((transform().m11() < 8 || factor < 1) && (transform().m11() > 0.1 || factor > 1))
+        {
+            scale(factor, factor);
+        }
+        event->accept();
+    }
+
+    void mouseDoubleClickEvent(QMouseEvent*) override
+    {
+        if (scene())
+        {
+            fitInView(scene()->sceneRect(), Qt::KeepAspectRatio);
+        }
+    }
+
     void resizeEvent(QResizeEvent* event) override
     {
         QGraphicsView::resizeEvent(event);
@@ -95,10 +113,115 @@ class SeriesChart : public QWidget
     QString title, unit, note;
     QMap<int, QVector<QPointF>> data;
     QMap<int, QString> labels;
+    double binSeconds = 0.1;
+    double endSeconds = 1e100;
+    QMap<int, QMap<double, QString>> details;
+    double viewMin = NAN, viewMax = NAN;
+    QPointF hover = QPointF(-1, -1);
+
+    QRectF plotRect() const
+    {
+        return QRectF(55, 96, width() - 75, height() - 138);
+    }
+
+    QPair<double, double> bounds() const
+    {
+        double lo = 1e100, hi = -1e100;
+        for (const auto& points : data)
+        {
+            for (auto v : points)
+            {
+                lo = std::min(lo, v.x());
+                hi = std::max(hi, v.x());
+            }
+        }
+        if (lo == hi)
+        {
+            lo -= binSeconds;
+        }
+        return {lo, std::min(endSeconds, hi + binSeconds)};
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        hover = event->pos();
+        const auto area = plotRect();
+        auto range = bounds();
+        double lo = std::isfinite(viewMin) ? viewMin : range.first;
+        double hi = std::isfinite(viewMax) ? viewMax : range.second;
+        if (!area.contains(hover) || lo >= hi)
+        {
+            QToolTip::hideText();
+            update();
+            return;
+        }
+        double time = lo + (hover.x() - area.left()) / area.width() * (hi - lo);
+        QStringList lines;
+        lines << title.toHtmlEscaped();
+        for (auto it = data.begin(); it != data.end(); ++it)
+        {
+            if (it->isEmpty())
+            {
+                continue;
+            }
+            auto best = std::upper_bound(it->begin(), it->end(), time, [](double t, QPointF point) {
+                return t < point.x();
+            });
+            if (best != it->begin())
+            {
+                --best;
+            }
+            lines << QString("%1 · [%2, %3) s：<b>%4 %5</b>%6")
+                         .arg(labels.value(it.key()).toHtmlEscaped())
+                         .arg(best->x(), 0, 'f', 6)
+                         .arg(std::min(endSeconds, best->x() + binSeconds), 0, 'f', 6)
+                         .arg(std::isfinite(best->y()) ? QString::number(best->y(), 'f', 6)
+                                                       : QString("无接收样本"))
+                         .arg(unit)
+                         .arg(details.value(it.key()).value(best->x()));
+        }
+        lines << "滚轮缩放 · 双击复位";
+        QToolTip::showText(mapToGlobal(event->pos()), lines.join("<br>"), this);
+        update();
+    }
+
+    void leaveEvent(QEvent*) override
+    {
+        hover = QPointF(-1, -1);
+        QToolTip::hideText();
+        update();
+    }
+
+    void mouseDoubleClickEvent(QMouseEvent*) override
+    {
+        viewMin = viewMax = NAN;
+        update();
+    }
+
+    void wheelEvent(QWheelEvent* event) override
+    {
+        auto range = bounds();
+        if (range.first >= range.second || !plotRect().contains(event->position()))
+        {
+            return;
+        }
+        double lo = std::isfinite(viewMin) ? viewMin : range.first;
+        double hi = std::isfinite(viewMax) ? viewMax : range.second;
+        double fraction = (event->position().x() - plotRect().left()) / plotRect().width();
+        double anchor = lo + fraction * (hi - lo);
+        double span = std::clamp((hi - lo) * (event->angleDelta().y() > 0 ? 0.8 : 1.25),
+                                 std::min(binSeconds, range.second - range.first),
+                                 range.second - range.first);
+        viewMin = std::clamp(anchor - fraction * span, range.first, range.second - span);
+        viewMax = viewMin + span;
+        update();
+        event->accept();
+    }
 
     explicit SeriesChart(QWidget* p = nullptr)
         : QWidget(p)
     {
+        setMouseTracking(true);
         setMinimumHeight(220);
         setMinimumWidth(270);
     }
@@ -117,9 +240,9 @@ class SeriesChart : public QWidget
         f.setBold(false);
         f.setPointSize(8);
         p.setFont(f);
-        p.setPen(QColor("#748296"));
+        p.setPen(QColor("#52657c"));
         p.drawText(QRectF(16, 35, width() - 32, 34), Qt::TextWordWrap, note);
-        QRectF plot(55, 84, width() - 75, height() - 126);
+        QRectF plot = plotRect();
         if (plot.height() < 30)
         {
             return;
@@ -146,13 +269,21 @@ class SeriesChart : public QWidget
         {
             xmax = xmin + 0.1;
         }
+        auto range = bounds();
+        xmin = range.first;
+        xmax = range.second;
+        if (std::isfinite(viewMin))
+        {
+            xmin = viewMin;
+            xmax = viewMax;
+        }
         ymax = std::max(0.001, ymax * 1.12);
         for (int i = 0; i < 5; ++i)
         {
             double y = plot.bottom() - i * plot.height() / 4;
             p.setPen(QColor("#e9eef5"));
             p.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y));
-            p.setPen(QColor("#718399"));
+            p.setPen(QColor("#52657c"));
             p.drawText(QRectF(0, y - 8, 48, 16),
                        Qt::AlignRight,
                        QString::number(i * ymax / 4, 'g', 3));
@@ -190,14 +321,31 @@ class SeriesChart : public QWidget
                 last = q;
             }
             p.setPen(QPen(color(it.key()), 2));
+            p.save();
+            p.setClipRect(plot.adjusted(-3, -3, 3, 3));
             p.drawPath(path);
             if (it.value().size() == 1 && std::isfinite(it.value()[0].y()))
             {
                 p.setBrush(color(it.key()));
                 p.drawEllipse(last, 3, 3);
             }
-            p.drawText(QRectF(16 + legend * 145, 65, 142, 16), labels.value(it.key()));
+            p.restore();
+            if (legend < 2)
+            {
+                p.drawText(QRectF(16 + legend * (width() - 32) / 2, 72, (width() - 32) / 2, 16),
+                           labels.value(it.key()));
+            }
+            if (legend == 2)
+            {
+                p.drawText(QRectF(16, height() - 18, width() - 32, 16),
+                           QString("共 %1 条曲线 · 悬浮查看所有跳").arg(data.size()));
+            }
             ++legend;
+        }
+        if (plot.contains(hover))
+        {
+            p.setPen(QPen(QColor("#52677e"), 1, Qt::DashLine));
+            p.drawLine(QPointF(hover.x(), plot.top()), QPointF(hover.x(), plot.bottom()));
         }
     }
 };
@@ -238,6 +386,27 @@ MeshvizWindow::MeshvizWindow(const QString& file)
 {
     setWindowTitle("MeshViz · " + QFileInfo(file).fileName());
     resize(1520, 1000);
+    // Pin the application palette so a dark desktop cannot supply white table text.
+    QPalette light;
+    for (auto group : {QPalette::Active, QPalette::Inactive, QPalette::Disabled})
+    {
+        light.setColor(group, QPalette::Window, QColor("#f1f5fa"));
+        light.setColor(group, QPalette::Base, Qt::white);
+        light.setColor(group, QPalette::AlternateBase, QColor("#f6f9fe"));
+        light.setColor(group, QPalette::Button, QColor("#eaf0f8"));
+        for (auto role :
+             {QPalette::WindowText, QPalette::Text, QPalette::ButtonText, QPalette::ToolTipText})
+        {
+            light.setColor(group,
+                           role,
+                           QColor(group == QPalette::Disabled ? "#67788c" : "#20364e"));
+        }
+        light.setColor(group, QPalette::ToolTipBase, QColor("#f4f8fe"));
+        light.setColor(group, QPalette::Highlight, QColor("#cde3ff"));
+        light.setColor(group, QPalette::HighlightedText, QColor("#163958"));
+    }
+    QApplication::setPalette(light);
+    setPalette(light);
     QFile input(file);
     if (!input.open(QIODevice::ReadOnly))
     {
@@ -292,6 +461,10 @@ MeshvizWindow::MeshvizWindow(const QString& file)
             {
                 m_packetPpdus[quint64(packet.toDouble())].push_back(id);
             }
+        }
+        else if (type == "packet")
+        {
+            m_packetInfo[number(o, "packet")] = o;
         }
         else if (type == "hop")
         {
@@ -361,6 +534,7 @@ MeshvizWindow::MeshvizWindow(const QString& file)
     tl->addWidget(split, 3);
     auto* charts = new QHBoxLayout;
     auto* total = new SeriesChart;
+    total->setObjectName("totalChart");
     total->title = "总吞吐 · 应用有效负载";
     total->unit = "Mbps";
     total->note = "所有主业务 PacketSink 合计；不重复累计中继流量";
@@ -370,10 +544,12 @@ MeshvizWindow::MeshvizWindow(const QString& file)
         total->data[0].append(QPointF(o["timeNs"].toDouble() / 1e9, o["mbps"].toDouble()));
     }
     auto* throughput = new SeriesChart;
+    throughput->setObjectName("hopChart");
     throughput->title = "每一跳吞吐";
     throughput->unit = "Mbps";
     throughput->note = "下一跳 IPv4 接收字节，含 IP 头；100 ms 分桶";
     auto* delay = new SeriesChart;
+    delay->setObjectName("delayChart");
     delay->title = "每一跳时延";
     delay->unit = "ms";
     delay->note = "本跳 IPv4 Tx → Rx，含排队及重传；分桶均值";
@@ -384,8 +560,18 @@ MeshvizWindow::MeshvizWindow(const QString& file)
         delay->labels[h] = hopName(h);
         double x = o["timeNs"].toDouble() / 1e9;
         throughput->data[h].append(QPointF(x, o["mbps"].toDouble()));
+        delay->details[h][x] = QString(" · %1 个样本 · 最大值 %2 ms")
+                                   .arg(o["samples"].toInt())
+                                   .arg(o["maxDelayMs"].isNull()
+                                            ? "N/A"
+                                            : QString::number(o["maxDelayMs"].toDouble(), 'f', 6));
         delay->data[h].append(
             QPointF(x, o["meanDelayMs"].isNull() ? NAN : o["meanDelayMs"].toDouble()));
+    }
+    for (auto* chart : {total, throughput, delay})
+    {
+        chart->binSeconds = m_run["binNs"].toDouble(1e8) / 1e9;
+        chart->endSeconds = m_run["endNs"].toDouble() / 1e9;
     }
     charts->addWidget(total);
     charts->addWidget(throughput);
@@ -394,9 +580,13 @@ MeshvizWindow::MeshvizWindow(const QString& file)
     m_tabs->addTab(timelinePage, "PPDU 时序 / 逐跳统计");
     auto* topologyPage = new QWidget;
     auto* topologyLayout = new QVBoxLayout(topologyPage);
-    topologyLayout->addWidget(new QLabel("自动布局：由本次仿真的真实链路生成。实线 = 有线；虚线 = "
-                                         "Wi-Fi；橙色 = OBSS；蓝色粗线 = 所选包已观测路径。"));
+    topologyLayout->addWidget(new QLabel(
+        "自动布局：由本次仿真的真实链路生成。实线 = 有线；虚线 = "
+        "Wi-Fi；橙色 = OBSS；蓝线 = 所选包路径；绿线 = 当前跳。滚轮缩放 / 拖动 / 双击复位。"));
     m_topology = new TopologyView;
+    m_topology->setObjectName("topology");
+    m_topology->setDragMode(QGraphicsView::ScrollHandDrag);
+    m_topology->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     m_topology->setRenderHint(QPainter::Antialiasing);
     topologyLayout->addWidget(m_topology, 1);
     auto* topologyTable = table({"链路", "节点", "介质", "发送接口 MAC", "接收接口 MAC"});
@@ -470,9 +660,12 @@ MeshvizWindow::MeshvizWindow(const QString& file)
     });
     updateMcs();
     m_tabs->addTab(radioPage, "MCS 分布");
-    auto* openLife = new QPushButton("查看选中 PPDU 的生命周期 →");
+    createJumpPage();
+    auto* openLife = new QPushButton("在 jump 中查看完整逐跳详情 →");
     tl->addWidget(openLife);
-    connect(openLife, &QPushButton::clicked, this, [this] { m_tabs->setCurrentIndex(2); });
+    connect(openLife, &QPushButton::clicked, this, [this] {
+        m_tabs->setCurrentWidget(m_jumpPage);
+    });
     for (auto it = m_hops.begin(); it != m_hops.end(); ++it)
     {
         m_packets->addItem(
@@ -537,14 +730,20 @@ MeshvizWindow::MeshvizWindow(const QString& file)
         }
     });
     setStyleSheet(
-        "QMainWindow,QWidget{font-family:'Noto Sans CJK SC','Sans Serif';font-size:12px;} "
+        "QMainWindow,QWidget{font-family:'Noto Sans CJK SC','Sans "
+        "Serif';font-size:12px;color:#20364e;} "
         "QMainWindow{background:#f1f5fa;} QTabWidget::pane{border:1px solid "
         "#d9e3ef;background:white;} QTabBar::tab{padding:10px 20px;background:#e8eef6;} "
         "QTabBar::tab:selected{background:white;color:#216cc6;} QPushButton{padding:8px "
         "16px;border:1px solid #cfdaea;border-radius:6px;background:#f8fbff;color:#254c75;} "
         "QTableWidget{background:white;alternate-background-color:#f6f9fe;gridline-color:#e0e7f0;"
         "border:1px solid #dbe4f0;} "
-        "QHeaderView::section{padding:6px;background:#eaf0f8;border:0;font-weight:600;}");
+        "QHeaderView::section{padding:6px;background:#eaf0f8;color:#20364e;border:0;font-weight:"
+        "600;}"
+        "QComboBox,QLineEdit,QTextEdit{background:white;color:#20364e;padding:5px;}"
+        "QAbstractItemView{color:#20364e;selection-background-color:#cde3ff;selection-color:#"
+        "163958;}"
+        "QToolTip{background:#f4f8fe;color:#20364e;border:1px solid #91adc9;padding:8px;}");
     drawTopology();
     selectPacket();
     QTimer::singleShot(50, this, [this] {
@@ -577,6 +776,7 @@ MeshvizWindow::MeshvizWindow(const QString& file)
 void
 MeshvizWindow::selectPpdu(uint32_t id)
 {
+    auto previousPacket = m_packets->currentData();
     m_selectedPpdu = id;
     const auto ids = m_ppdus.value(id)["packets"].toArray();
     m_packets->blockSignals(true);
@@ -585,6 +785,11 @@ MeshvizWindow::selectPpdu(uint32_t id)
     {
         m_packets->addItem(QString("PPDU #%1 内的数据包 #%2").arg(id).arg(quint64(p.toDouble())),
                            QVariant::fromValue(quint64(p.toDouble())));
+    }
+    int previousIndex = m_packets->findData(previousPacket);
+    if (previousIndex >= 0)
+    {
+        m_packets->setCurrentIndex(previousIndex);
     }
     m_packets->blockSignals(false);
     selectPacket();
@@ -669,7 +874,7 @@ MeshvizWindow::selectPacket()
              p["retry"].toBool() ? "Yes" : "No",
              result.isEmpty() ? "未观测接收结果" : result.join("; ")});
     }
-    drawTopology();
+    updateJump();
 }
 
 void
@@ -761,13 +966,14 @@ MeshvizWindow::drawTopology()
     {
         auto a = pos[e["from"].toInt()], b = pos[e["to"].toInt()];
         int id = e["id"].toInt();
-        QColor c = m_selectedHops.contains(id)
+        QColor c = id == m_activeHop ? QColor("#087d67")
+                   : m_selectedHops.contains(id)
                        ? QColor("#2878d4")
                        : (e["background"].toBool() ? QColor("#e69a35") : QColor("#7e8c9d"));
         QPen pen(c,
-                 m_selectedHops.contains(id) ? 3.5 : 2,
+                 id == m_activeHop ? 5 : (m_selectedHops.contains(id) ? 3.5 : 2),
                  e["wireless"].toBool() ? Qt::DashLine : Qt::SolidLine);
-        scene->addLine(QLineF(a, b), pen);
+        scene->addLine(QLineF(a + QPointF(42, 0), b - QPointF(42, 0)), pen);
         auto* text = scene->addText(
             QString("%1 · hop %2").arg(e["wireless"].toBool() ? "Wi-Fi" : "Ethernet").arg(id));
         text->setDefaultTextColor(c);
@@ -776,16 +982,33 @@ MeshvizWindow::drawTopology()
     for (auto id : m_nodes.keys())
     {
         auto p = pos[id];
-        auto* box = scene->addRect(QRectF(p.x() - 66, p.y() - 28, 132, 58),
-                                   QPen(QColor("#b6cbe1")),
-                                   QBrush(QColor("#f3f8ff")));
+        QPainterPath body;
+        body.addRoundedRect(QRectF(p.x() - 32, p.y() - 3, 64, 19), 2, 2);
+        auto* box = scene->addPath(body, QPen(QColor("#a2abb5")), QBrush(QColor("#c8cdd3")));
+        for (int side : {-1, 1})
+        {
+            scene->addLine(p.x() + side * 24,
+                           p.y() - 4,
+                           p.x() + side * 24,
+                           p.y() - 40,
+                           QPen(QColor("#6e7884"), 2));
+        }
+        scene->addRect(p.x() - 26, p.y() - 7, 52, 5, Qt::NoPen, QBrush(QColor("#929da7")));
+        for (int radius : {8, 14, 20})
+        {
+            QPainterPath arc;
+            arc.arcMoveTo(QRectF(p.x() - radius, p.y() - 28 - radius, 2 * radius, 2 * radius), 45);
+            arc.arcTo(QRectF(p.x() - radius, p.y() - 28 - radius, 2 * radius, 2 * radius), 45, 90);
+            scene->addPath(arc, QPen(QColor("#2aa2c5"), 2));
+        }
+        scene->addEllipse(p.x() - 2, p.y() - 29, 4, 4, Qt::NoPen, QBrush(QColor("#2aa2c5")));
         auto* t = scene->addText(nodeName(id));
         QFont f = t->font();
         f.setBold(true);
         f.setPointSize(12);
         t->setFont(f);
         t->setDefaultTextColor(QColor("#234b75"));
-        t->setPos(p.x() - t->boundingRect().width() / 2, p.y() - 19);
+        t->setPos(p.x() - t->boundingRect().width() / 2, p.y() + 20);
         auto n = m_nodes[id];
         QStringList macs;
         for (auto d : m_macDevices)
@@ -796,8 +1019,8 @@ MeshvizWindow::drawTopology()
             }
         }
         auto* sub = scene->addText(QString("Node %1 · %2 interfaces").arg(id).arg(macs.size()));
-        sub->setDefaultTextColor(QColor("#74869b"));
-        sub->setPos(p.x() - 75, p.y() + 32);
+        sub->setDefaultTextColor(QColor("#52657c"));
+        sub->setPos(p.x() - 75, p.y() + 49);
         box->setToolTip(macs.join('\n'));
         t->setToolTip(macs.join('\n'));
     }
@@ -830,4 +1053,350 @@ MeshvizWindow::exportViews(const QString& directory)
         }
     }
     return true;
+}
+
+void
+MeshvizWindow::createJumpPage()
+{
+    m_jumpPage = new QWidget;
+    auto* layout = new QVBoxLayout(m_jumpPage);
+    auto* hint = new QLabel("选择 PPDU → 选择其承载的数据包 → 查看全部已观测跳。每一跳有自己的 "
+                            "PPDU；有线跳保留 IP 事件。播放按采集顺序逐帧前进（非实时速率）。");
+    hint->setWordWrap(true);
+    layout->addWidget(hint);
+    auto* split = new QSplitter;
+    auto* inventory = new QWidget;
+    auto* left = new QVBoxLayout(inventory);
+    auto* search = new QLineEdit;
+    search->setObjectName("jumpSearch");
+    search->setPlaceholderText("筛选 PPDU 编号、节点、MAC 或帧类型…");
+    left->addWidget(search);
+    m_jumpList = table({"PPDU", "发送端 / MAC", "帧", "数据包数"});
+    m_jumpList->setObjectName("jumpList");
+    m_jumpList->setSelectionMode(QAbstractItemView::SingleSelection);
+    for (auto p : m_ppdus)
+    {
+        row(m_jumpList,
+            {QString::number(number(p, "id")),
+             endpoint(number(p, "sender")),
+             p["frame"].toString(),
+             QString::number(p["packets"].toArray().size())});
+    }
+    left->addWidget(m_jumpList);
+    connect(search, &QLineEdit::textChanged, this, [this](const QString& text) {
+        for (int r = 0; r < m_jumpList->rowCount(); ++r)
+        {
+            QString value;
+            for (int c = 0; c < m_jumpList->columnCount(); ++c)
+            {
+                value += m_jumpList->item(r, c)->text() + " ";
+            }
+            m_jumpList->setRowHidden(r, !value.contains(text, Qt::CaseInsensitive));
+        }
+    });
+    connect(m_jumpList, &QTableWidget::currentCellChanged, this, [this](int r, int, int, int) {
+        if (r >= 0)
+        {
+            m_replay->stop();
+            m_play->setText("播放路径");
+            m_timeline->selectId(m_jumpList->item(r, 0)->text().toUInt());
+        }
+    });
+    auto* detail = new QWidget;
+    auto* right = new QVBoxLayout(detail);
+    m_jumpPackets = new QComboBox;
+    m_jumpPackets->setObjectName("jumpPackets");
+    right->addWidget(m_jumpPackets);
+    connect(m_jumpPackets,
+            qOverload<int>(&QComboBox::currentIndexChanged),
+            this,
+            [this](int index) {
+                m_replay->stop();
+                m_play->setText("播放路径");
+                m_packets->setCurrentIndex(index);
+            });
+    auto* controls = new QHBoxLayout;
+    auto* previous = new QPushButton("上一个 PPDU");
+    auto* next = new QPushButton("下一个 PPDU");
+    m_play = new QPushButton("播放路径");
+    m_play->setObjectName("jumpPlay");
+    next->setObjectName("jumpNext");
+    auto* locate = new QPushButton("定位到时序图");
+    controls->addWidget(previous);
+    controls->addWidget(m_play);
+    controls->addWidget(next);
+    controls->addWidget(locate);
+    right->addLayout(controls);
+    m_replay = new QTimer(this);
+    m_replay->setInterval(700);
+    connect(previous, &QPushButton::clicked, this, [this] { stepJump(-1); });
+    connect(next, &QPushButton::clicked, this, [this] { stepJump(1); });
+    connect(m_replay, &QTimer::timeout, this, [this] { stepJump(1); });
+    connect(m_play, &QPushButton::clicked, this, [this] {
+        if (m_replay->isActive())
+        {
+            m_replay->stop();
+            m_play->setText("播放路径");
+        }
+        else
+        {
+            m_replay->start();
+            m_play->setText("暂停");
+        }
+    });
+    connect(locate, &QPushButton::clicked, this, [this] {
+        m_timeline->selectId(m_selectedPpdu);
+        m_tabs->setCurrentIndex(0);
+    });
+    m_jumpPath = new QLabel;
+    m_jumpPath->setObjectName("jumpPath");
+    m_jumpPath->setWordWrap(true);
+    m_jumpPath->setTextFormat(Qt::PlainText);
+    m_jumpPath->setStyleSheet("padding:12px;background:#eaf2ff;color:#20364e;");
+    right->addWidget(m_jumpPath);
+    m_jumpHops = table({"跳", "路径", "介质", "IP TX / RX", "本跳时延 (ms)", "相关 PPDU"});
+    m_jumpHops->setObjectName("jumpHops");
+    m_jumpHops->setSelectionMode(QAbstractItemView::SingleSelection);
+    right->addWidget(m_jumpHops, 1);
+    m_jumpDetails = new QTextBrowser;
+    m_jumpDetails->setObjectName("jumpDetails");
+    right->addWidget(m_jumpDetails, 2);
+    connect(m_jumpHops, &QTableWidget::currentCellChanged, this, [this] { showJumpDetails(); });
+    split->addWidget(inventory);
+    split->addWidget(detail);
+    split->setStretchFactor(0, 1);
+    split->setStretchFactor(1, 3);
+    split->setSizes({380, 1080});
+    layout->addWidget(split, 1);
+    m_tabs->addTab(m_jumpPage, "jump");
+}
+
+void
+MeshvizWindow::updateJump()
+{
+    if (!m_jumpPage)
+    {
+        return;
+    }
+    const QSignalBlocker packetBlock(m_jumpPackets), listBlock(m_jumpList), hopBlock(m_jumpHops);
+    m_jumpPackets->clear();
+    for (int i = 0; i < m_packets->count(); ++i)
+    {
+        m_jumpPackets->addItem(m_packets->itemText(i), m_packets->itemData(i));
+    }
+    m_jumpPackets->setCurrentIndex(m_packets->currentIndex());
+    for (int r = 0; r < m_jumpList->rowCount(); ++r)
+    {
+        if (m_jumpList->item(r, 0)->text().toULongLong() == m_selectedPpdu)
+        {
+            m_jumpList->setCurrentCell(r, 0);
+            m_jumpList->scrollToItem(m_jumpList->item(r, 0));
+            break;
+        }
+    }
+    auto packet = m_packets->currentData().toULongLong();
+    auto selected = m_ppdus.value(m_selectedPpdu);
+    const auto info = m_packetInfo.value(packet);
+    m_jumpPath->setText(
+        QString("当前 PPDU #%1 · %2 → %3\n%4")
+            .arg(m_selectedPpdu)
+            .arg(endpoint(number(selected, "sender")))
+            .arg(endpoint(number(selected, "receiver")))
+            .arg(packet ? QString("%1 · 目的端口 %2%3\n")
+                                  .arg(info["protocol"].toInt() == 6 ? "TCP" : "UDP")
+                                  .arg(info["port"].toInt())
+                                  .arg(info["protocol"].toInt() == 6
+                                           ? QString(" · TCP Seq %1")
+                                                 .arg(info["tcpSeq"].toDouble(), 0, 'f', 0)
+                                           : QString()) +
+                              m_path->text()
+                        : QString("此帧没有已追踪的主业务数据包；仅展示本帧的真实接收记录，不推断跨"
+                                  "跳路径。")));
+    m_jumpHops->setRowCount(0);
+    auto hops = m_hops.value(packet);
+    std::stable_sort(hops.begin(), hops.end(), [](auto a, auto b) {
+        return number(a, "timeNs") < number(b, "timeNs");
+    });
+    QSet<int> seen;
+    int activeRow = 0;
+    for (auto h : hops)
+    {
+        int hid = h["hop"].toInt();
+        if (seen.contains(hid))
+        {
+            continue;
+        }
+        seen.insert(hid);
+        auto link = m_links.value(hid);
+        int tx = 0, rx = 0;
+        QStringList delays, ids;
+        for (auto event : hops)
+        {
+            if (event["hop"].toInt() == hid)
+            {
+                if (event["event"] == "TX")
+                {
+                    ++tx;
+                }
+                if (event["event"] == "RX")
+                {
+                    ++rx;
+                    if (event["delayMs"].toDouble(-1) >= 0)
+                    {
+                        delays << QString::number(event["delayMs"].toDouble(), 'f', 6);
+                    }
+                }
+            }
+        }
+        for (auto pid : m_packetPpdus.value(packet))
+        {
+            auto p = m_ppdus.value(pid);
+            if (number(p, "sender") == number(link, "sender") &&
+                number(p, "receiver") == number(link, "receiver"))
+            {
+                ids << QString::number(pid);
+                if (pid == m_selectedPpdu)
+                {
+                    activeRow = m_jumpHops->rowCount();
+                }
+            }
+        }
+        row(m_jumpHops,
+            {QString::number(hid),
+             hopName(hid),
+             link["wireless"].toBool() ? "Wi-Fi" : "Ethernet",
+             QString("%1 / %2").arg(tx).arg(rx),
+             delays.isEmpty() ? "未观测 RX" : delays.join(", "),
+             ids.isEmpty() ? (link["wireless"].toBool() ? "采集内无匹配 PPDU" : "有线：无 PPDU")
+                           : ids.join(", ")});
+    }
+    if (m_jumpHops->rowCount())
+    {
+        m_jumpHops->setCurrentCell(activeRow, 0);
+    }
+    showJumpDetails();
+}
+
+void
+MeshvizWindow::showJumpDetails()
+{
+    if (!m_jumpDetails)
+    {
+        return;
+    }
+    const auto packet = m_packets->currentData().toULongLong();
+    const int r = m_jumpHops->currentRow();
+    const int hid = r >= 0 ? m_jumpHops->item(r, 0)->text().toInt() : -1;
+    const auto link = m_links.value(hid);
+    QString text;
+    if (hid >= 0)
+    {
+        text += QString("<h3>Hop %1 · %2</h3><p>发送：%3<br>接收：%4</p>")
+                    .arg(hid)
+                    .arg(hopName(hid).toHtmlEscaped())
+                    .arg(endpoint(number(link, "sender")).toHtmlEscaped())
+                    .arg(endpoint(number(link, "receiver")).toHtmlEscaped());
+        text += "<b>IP 逐跳事件（毫秒）</b><ul>";
+        for (auto event : m_hops.value(packet))
+        {
+            if (event["hop"].toInt() == hid)
+            {
+                text +=
+                    QString("<li>%1 · %2 ms · %3 B · 分片偏移 %4 · 时延 %5</li>")
+                        .arg(event["event"].toString())
+                        .arg(event["timeNs"].toDouble() / 1e6, 0, 'f', 6)
+                        .arg(event["bytes"].toInt())
+                        .arg(event["fragment"].toInt())
+                        .arg(event["delayMs"].toDouble(-1) < 0
+                                 ? "—"
+                                 : QString::number(event["delayMs"].toDouble(), 'f', 6) + " ms");
+            }
+        }
+        text += "</ul>";
+    }
+    auto ids = m_packetPpdus.value(packet);
+    if (ids.isEmpty() && m_selectedPpdu)
+    {
+        ids.append(m_selectedPpdu);
+    }
+    int matches = 0;
+    for (auto pid : ids)
+    {
+        auto p = m_ppdus.value(pid);
+        if (hid >= 0 && (number(p, "sender") != number(link, "sender") ||
+                         number(p, "receiver") != number(link, "receiver")))
+        {
+            continue;
+        }
+        ++matches;
+        text += QString("<h3>%1PPDU #%2 · %3</h3><p>%4 → %5<br>开始 %6 ms · 结束 %7 ms · 持续 %8 "
+                        "µs<br>信道 %9 · MCS %10 · %11 B · %12 MPDU · MAC 重传 %13</p>")
+                    .arg(pid == m_selectedPpdu ? "▶ " : "")
+                    .arg(pid)
+                    .arg(p["frame"].toString().toHtmlEscaped())
+                    .arg(endpoint(number(p, "sender")).toHtmlEscaped())
+                    .arg(endpoint(number(p, "receiver")).toHtmlEscaped())
+                    .arg(p["startNs"].toDouble() / 1e6, 0, 'f', 6)
+                    .arg(p["endNs"].toDouble() / 1e6, 0, 'f', 6)
+                    .arg((p["endNs"].toDouble() - p["startNs"].toDouble()) / 1e3, 0, 'f', 3)
+                    .arg(p["channel"].toInt())
+                    .arg(p["mcs"].toInt() < 0 ? "Legacy" : QString::number(p["mcs"].toInt()))
+                    .arg(p["bytes"].toInt())
+                    .arg(p["mpdus"].toInt())
+                    .arg(p["retry"].toBool() ? "是" : "否");
+        text += "<ul>";
+        for (auto rx : m_receives.value(pid))
+        {
+            text += QString("<li>%1 · %2 ms · %3 OK / %4 fail · SNR %5%6</li>")
+                        .arg(nodeName(rx["node"].toInt()).toHtmlEscaped())
+                        .arg(rx["timeNs"].toDouble() / 1e6, 0, 'f', 6)
+                        .arg(rx["ok"].toInt())
+                        .arg(rx["failed"].toInt())
+                        .arg(rx["snrDb"].isNull()
+                                 ? "N/A"
+                                 : QString::number(rx["snrDb"].toDouble(), 'f', 3) + " dB")
+                        .arg(rx.contains("reason") ? " · " + rx["reason"].toString().toHtmlEscaped()
+                                                   : "");
+        }
+        if (m_receives.value(pid).isEmpty())
+        {
+            text += "<li>未观测接收结果；不能据此判断成功或失败。</li>";
+        }
+        text += "</ul>";
+    }
+    if (!matches)
+    {
+        text += link["wireless"].toBool()
+                    ? "<p>采集窗口内没有匹配的无线 PPDU。</p>"
+                    : "<p>有线链路没有无线 PPDU，以上为实际 IP 转发记录。</p>";
+    }
+    m_jumpDetails->setHtml(text);
+    m_activeHop = hid;
+    drawTopology();
+}
+
+void
+MeshvizWindow::stepJump(int direction)
+{
+    auto ids = m_packetPpdus.value(m_packets->currentData().toULongLong());
+    std::stable_sort(ids.begin(), ids.end(), [this](quint64 a, quint64 b) {
+        return number(m_ppdus.value(a), "startNs") < number(m_ppdus.value(b), "startNs");
+    });
+    if (ids.isEmpty())
+    {
+        m_replay->stop();
+        m_play->setText("播放路径");
+        return;
+    }
+    int index = ids.indexOf(m_selectedPpdu) + direction;
+    if (index < 0 || index >= ids.size())
+    {
+        if (m_replay->isActive())
+        {
+            m_replay->stop();
+            m_play->setText("播放路径");
+        }
+        index = direction > 0 ? 0 : ids.size() - 1;
+    }
+    m_timeline->selectId(ids[index]);
 }

@@ -7,16 +7,18 @@
 ## 功能
 
 - **原生 PPDU 时序图**：滚轮缩放、拖拽平移、时间范围选择、全局范围滑块、Fit All、点选详情、图片导出。默认放大到前 8 ms，避免大量帧挤成细线。
-- **自动树状网络布局**：从本次实际设备连接生成，从左到右按拓扑层级排布，不使用物理坐标定位。星形、链形、STA 接入点、混合有线回程、OBSS 自动反映在图中。
+- **jump 逐跳检查页**：按 PPDU 编号、节点、MAC 或帧类型搜索。选择聚合中的具体数据包，列出完整已观测路径，每跳展示 TX/RX、时延、相关 PPDU；点击跳可查看所有无线发送、重传、接收/丢弃原因与 SNR。支持上一个/下一个、播放/暂停，以及定位回时序图。播放按 PPDU 顺序每 700 ms 前进，不代表仿真实时速率；到末尾回到起点并停止。
+- **自动树状网络布局**：双天线路由器图标；滚轮缩放、拖动平移、双击复位。绿线标识当前检查的跳，蓝线标识所选包的其余路径。从本次实际设备连接生成，从左到右按拓扑层级排布，不使用物理坐标定位。星形、链形、STA 接入点、混合有线回程、OBSS 自动反映在图中。
 - **稳定身份**：显式登记物理节点 `ONT / AP1 / AP2 / STA1`，每个接口 MAC 映射回所属节点。时序行显示 `AP1 / if1`、`AP1 / if2`，同节点同颜色，不把 AP 的上游 STA 接口另起一个 STA 编号。
 - **PPDU 生命周期 / 数据包跨跳路径**：选中 PPDU 后选择它承载的具体数据包，查看 `MAC（节点/接口）→ …`、逐跳 TX/RX、无线 PPDU、重传、聚合、MCS、接收结果和 SNR；图中高亮已经观测到的路径。
 - **TCP / UDP**：两种业务都支持，使用原 ZIP 中的 8 种拓扑和 3 种 STA 接入方式；支持 A-MPDU/A-MSDU 和 IP 分片。
 - **MCS 分布**：复用 WiFiViz 原生直方图，按物理节点筛选，含 Legacy 桶。
-- **逐跳时延、总吞吐、逐跳吞吐**：统计窗口与详细 PPDU 捕获窗口分离。捕获上限不截断完整统计。
+- **逐跳时延、总吞吐、逐跳吞吐**：悬浮显示对应时间桶的精确数值和所有跳，时延另列样本数及最大值；滚轮围绕鼠标缩放、双击复位。统计窗口与详细 PPDU 捕获窗口分离。捕获上限不截断完整统计。
 
 ![自动生成的树状网络布局](doc/topology.png)
 ![星形混合回程及 OBSS 自动布局](doc/topology-star.png)
 ![生命周期](doc/lifecycle.png)
+![jump 逐跳交互检查](doc/jump.png)
 
 ## 安装 / 编译
 
@@ -86,7 +88,7 @@ cmake --build build -j 2
 ./build/bin/contrib/meshviz/meshviz-viewer doc/example.jsonl
 ```
 
-导出四页 PNG（可在无桌面环境运行）：
+导出五页 PNG（可在无桌面环境运行）：
 
 ```bash
 QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=generic \
@@ -143,7 +145,20 @@ python3 contrib/meshviz/test/integration.py --report /path/to/validation.json
 ./test.py --no-build -s meshviz
 ```
 
-测试运行真实 ns-3 仿真，覆盖 8 × 3 × 2 个组合、TCP/UDP OBSS、高负载聚合、无聚合和不完整时间桶、MAC 唯一归属、完整跨跳关联、逐跳吞吐与 CSV 对照、应用吞吐对照、采集上限和开关记录不改变仿真结果。临时数据位于 `~/Work`（可用 `--work-dir` 修改），完成后自动清理。52 个场景全部通过；已执行的结果见 [`doc/validation.json`](doc/validation.json)，原生测试结果见 [`doc/native-test.txt`](doc/native-test.txt)。界面在 Qt 6 上实际导出并检查过四页 PNG。
+测试运行真实 ns-3 仿真，覆盖 8 × 3 × 2 个组合、TCP/UDP OBSS、高负载聚合、无聚合和不完整时间桶、MAC 唯一归属、完整跨跳关联、逐跳吞吐与 CSV 对照、应用吞吐对照、采集上限和开关记录不改变仿真结果。临时数据位于 `~/Work`（可用 `--work-dir` 修改），完成后自动清理。52 个场景全部通过；已执行的结果见 [`doc/validation.json`](doc/validation.json)，原生测试结果见 [`doc/native-test.txt`](doc/native-test.txt)。界面在 Qt 6 上实际导出并检查过五页 PNG；新增 Qt Test 鼠标/键盘/定时器验证，覆盖逐跳选择、帧搜索、播放、ACK 无跨跳路径、聚合成员切换、悬浮数值、图表/拓扑缩放与复位，并模拟深色系统调色板核对文字可读性。
+
+交互测试可独立构建（不会增加正常查看器的运行依赖）：
+
+```bash
+cmake -S ui -B ~/Work/meshviz-ui-check -DMESHVIZ_UI_TESTS=ON
+cmake --build ~/Work/meshviz-ui-check -j 2
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=generic \
+  MESHVIZ_TEST_TRACE="$PWD/doc/example.jsonl" \
+  ~/Work/meshviz-ui-check/bin/meshviz-ui-test
+# 对高负载 TCP 采集文件再运行 aggregateSelection，验证大聚合成员选择。
+```
+
+查看器固定使用浅色调色板，表格、下拉框、详情和提示文字不会继承桌面的白色前景。PNG 是导出的静态图片；上述交互在 `meshviz-viewer` 程序中使用。
 
 ## 来源 / 许可
 

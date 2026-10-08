@@ -1802,7 +1802,9 @@ void PpduTimelineView::paintPpduTimeline(QPainter &painter)
         uint64_t ns = startNs + i * (endNs - startNs) / 10;
         int x = m_leftMargin + (ns - m_viewStartNs) * m_nsToPixel;
 
+        painter.setPen(gridPen);
         painter.drawLine(x, topY, x, conflictBottomY);
+        painter.setPen(QColor("#52657c"));
         painter.drawText(x - 20,
                          conflictBottomY + 16,
                          QString::number(ns / 1e6, 'f', 2) + " ms");
@@ -3399,7 +3401,15 @@ void PpduTimelineView::fitAll()
 void PpduTimelineView::selectId(uint32_t id)
 {
     for (int i=0;i<m_ppduItems.size();++i) if(m_ppduItems[i].id==id) {
-        m_selectedIndex=i; updateDetailWindow(i); update(); return;
+        m_selectedIndex=i;
+        const auto& item = m_ppduItems[i];
+        const double span = usableTimelineWidth() / m_nsToPixel;
+        if (item.txStartNs < uint64_t(std::max<int64_t>(0,m_viewStartNs)) ||
+            item.txEndNs > m_viewStartNs + span) {
+            m_viewStartNs = std::max<int64_t>(0, int64_t(item.txStartNs) - int64_t(span / 4));
+            syncRangeSliderToView();
+        }
+        updateDetailWindow(i); update(); return;
     }
 }
 

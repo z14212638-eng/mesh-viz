@@ -12,9 +12,19 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()
 set(CMAKE_AUTOMOC ON)
-add_executable(meshviz-viewer main.cpp meshviz-window.cpp
+set(MESHVIZ_UI_SOURCES meshviz-window.cpp
   ppdu_timeline_view.cpp ppdu_detail_window.cpp ppdu_info_overlay.cpp
   ppdu_visual_item.cpp legend_overlay.cpp mcs_distribution_chart.cpp)
+add_executable(meshviz-viewer main.cpp ${MESHVIZ_UI_SOURCES})
 target_link_libraries(meshviz-viewer PRIVATE ${MESHVIZ_QT}::Widgets)
 target_compile_features(meshviz-viewer PRIVATE cxx_std_17)
 set_target_properties(meshviz-viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/meshviz")
+
+option(MESHVIZ_UI_TESTS "Build offline viewer interaction tests" OFF)
+if(MESHVIZ_UI_TESTS)
+  find_package(${MESHVIZ_QT} REQUIRED COMPONENTS Test)
+  add_executable(meshviz-ui-test ../test/ui-interaction.cpp ${MESHVIZ_UI_SOURCES})
+  target_include_directories(meshviz-ui-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(meshviz-ui-test PRIVATE ${MESHVIZ_QT}::Widgets ${MESHVIZ_QT}::Test)
+  target_compile_features(meshviz-ui-test PRIVATE cxx_std_17)
+endif()

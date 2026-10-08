@@ -1,0 +1,30 @@
+********* Start testing of InteractionTest *********
+Config: Using QtTest library 6.11.2, Qt 6.11.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 16.2.1 20260810), omarchy 4.0.4
+PASS   : InteractionTest::initTestCase()
+QWARN  : InteractionTest::aggregateSelection() This plugin does not support propagateSizeHints()
+QWARN  : InteractionTest::aggregateSelection() This plugin does not support propagateSizeHints()
+QWARN  : InteractionTest::aggregateSelection() This plugin does not support propagateSizeHints()
+PASS   : InteractionTest::aggregateSelection()
+QWARN  : InteractionTest::inspectAndReplay() This plugin does not support propagateSizeHints()
+QWARN  : InteractionTest::inspectAndReplay() This plugin does not support propagateSizeHints()
+QWARN  : InteractionTest::inspectAndReplay() This plugin does not support propagateSizeHints()
+QWARN  : InteractionTest::inspectAndReplay() This plugin does not support raise()
+QWARN  : InteractionTest::inspectAndReplay() This plugin does not support raise()
+QWARN  : InteractionTest::inspectAndReplay() This plugin does not support raise()
+PASS   : InteractionTest::inspectAndReplay()
+PASS   : InteractionTest::cleanupTestCase()
+Totals: 4 passed, 0 failed, 0 skipped, 0 blacklisted, 1199ms
+********* Finished testing of InteractionTest *********
+
+********* Start testing of InteractionTest *********
+Config: Using QtTest library 6.11.2, Qt 6.11.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 16.2.1 20260810), omarchy 4.0.4
+PASS   : InteractionTest::initTestCase()
+QWARN  : InteractionTest::aggregateSelection() This plugin does not support propagateSizeHints()
+QWARN  : InteractionTest::aggregateSelection() This plugin does not support propagateSizeHints()
+QWARN  : InteractionTest::aggregateSelection() This plugin does not support propagateSizeHints()
+PASS   : InteractionTest::aggregateSelection()
+PASS   : InteractionTest::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 312ms
+********* Finished testing of InteractionTest *********
+
+Actual TCP fixture maximum aggregate members: 872
