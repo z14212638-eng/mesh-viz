@@ -1,0 +1,8 @@
+WiFiViz upstream commit: 98f80b681cbdbc619abc3a6d626bf052d3536cc4
+Source: https://github.com/z14212638-eng/WiFiViz
+Reused: ui/ppdu_timeline_view.*, ui/ppdu_visual_item.*, ui/ppdu_detail_window.*,
+        ui/ppdu_info_overlay.*, ui/legend_overlay.*, ui/mcs_distribution_chart.*, ui/utils.h
+Adaptations: offline loading, physical-node MAC registry, stable rows/colors,
+            data-packet selection signal, compact inspector, PPDU-only controls,
+            overlap terminology and viewport fit.
+Recorder, tree layout, per-hop charts, lifecycle and integration tools: MeshViz.

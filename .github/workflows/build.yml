@@ -1,0 +1,28 @@
+name: ns-3.48 integration
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: meshviz
+      - run: sudo apt-get update && sudo apt-get install -y cmake g++ qt6-base-dev fonts-noto-cjk
+      - run: git clone --depth 1 --branch ns-3.48 https://gitlab.com/nsnam/ns-3-dev.git ns-3.48
+      - run: mv meshviz ns-3.48/contrib/meshviz
+      - working-directory: ns-3.48
+        run: |
+          python3 contrib/meshviz/tools/install.py
+          ./ns3 configure -d optimized --enable-modules=meshviz,csma --enable-examples --enable-tests --filter-module-examples-and-tests=meshviz
+          ./ns3 build mesh_test_obss_metrics test-runner -j 2
+          cmake --build cmake-cache --target meshviz-viewer -j 2
+          ./test.py --no-build -s meshviz
+          python3 contrib/meshviz/test/integration.py --report validation.json
+          QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=generic ./build/contrib/meshviz/meshviz-viewer contrib/meshviz/doc/example.jsonl --export figures
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-and-figures
+          path: |
+            ns-3.48/validation.json
+            ns-3.48/figures

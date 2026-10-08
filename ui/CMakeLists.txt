@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.22)
+# Also build the offline viewer without an ns-3 installation.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  project(meshviz-viewer LANGUAGES CXX)
+  find_package(Qt6 QUIET COMPONENTS Widgets)
+  if(Qt6_FOUND)
+    set(MESHVIZ_QT Qt6)
+  else()
+    find_package(Qt5 5.15 REQUIRED COMPONENTS Widgets)
+    set(MESHVIZ_QT Qt5)
+  endif()
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+endif()
+set(CMAKE_AUTOMOC ON)
+add_executable(meshviz-viewer main.cpp meshviz-window.cpp
+  ppdu_timeline_view.cpp ppdu_detail_window.cpp ppdu_info_overlay.cpp
+  ppdu_visual_item.cpp legend_overlay.cpp mcs_distribution_chart.cpp)
+target_link_libraries(meshviz-viewer PRIVATE ${MESHVIZ_QT}::Widgets)
+target_compile_features(meshviz-viewer PRIVATE cxx_std_17)
+set_target_properties(meshviz-viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/meshviz")

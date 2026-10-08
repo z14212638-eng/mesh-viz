@@ -1,0 +1,371 @@
+{
+  "baseline": "ns-3.48",
+  "cases": [
+    {
+      "case": "tcp-mode1-ap1",
+      "ppdus": 775,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode1-ap2",
+      "ppdus": 772,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode1-ont",
+      "ppdus": 389,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 1
+    },
+    {
+      "case": "tcp-mode2-ap1",
+      "ppdus": 429,
+      "packets": 126,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode2-ap2",
+      "ppdus": 767,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode2-ont",
+      "ppdus": 387,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 1
+    },
+    {
+      "case": "tcp-mode3-ap1",
+      "ppdus": 765,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode3-ap2",
+      "ppdus": 414,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode3-ont",
+      "ppdus": 388,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 1
+    },
+    {
+      "case": "tcp-mode4-ap1",
+      "ppdus": 423,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode4-ap2",
+      "ppdus": 421,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode4-ont",
+      "ppdus": 385,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 1
+    },
+    {
+      "case": "tcp-mode5-ap1",
+      "ppdus": 775,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode5-ap2",
+      "ppdus": 1149,
+      "packets": 126,
+      "goodputMbps": 10.02,
+      "hops": 3
+    },
+    {
+      "case": "tcp-mode5-ap2-aggregation",
+      "ppdus": 77,
+      "packets": 3115,
+      "goodputMbps": 505.104,
+      "hops": 3
+    },
+    {
+      "case": "tcp-mode5-ap2-obss",
+      "ppdus": 1187,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 3
+    },
+    {
+      "case": "tcp-mode5-ont",
+      "ppdus": 389,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 1
+    },
+    {
+      "case": "tcp-mode6-ap1",
+      "ppdus": 429,
+      "packets": 126,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode6-ap2",
+      "ppdus": 781,
+      "packets": 126,
+      "goodputMbps": 10.02,
+      "hops": 3
+    },
+    {
+      "case": "tcp-mode6-ont",
+      "ppdus": 387,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 1
+    },
+    {
+      "case": "tcp-mode7-ap1",
+      "ppdus": 765,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode7-ap2",
+      "ppdus": 767,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 3
+    },
+    {
+      "case": "tcp-mode7-ont",
+      "ppdus": 388,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 1
+    },
+    {
+      "case": "tcp-mode8-ap1",
+      "ppdus": 423,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 2
+    },
+    {
+      "case": "tcp-mode8-ap2",
+      "ppdus": 421,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 3
+    },
+    {
+      "case": "tcp-mode8-ont",
+      "ppdus": 385,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 1
+    },
+    {
+      "case": "udp-mode1-ap1",
+      "ppdus": 535,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode1-ap2",
+      "ppdus": 531,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode1-ont",
+      "ppdus": 266,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 1
+    },
+    {
+      "case": "udp-mode2-ap1",
+      "ppdus": 292,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode2-ap2",
+      "ppdus": 526,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode2-ont",
+      "ppdus": 264,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 1
+    },
+    {
+      "case": "udp-mode3-ap1",
+      "ppdus": 530,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode3-ap2",
+      "ppdus": 293,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode3-ont",
+      "ppdus": 265,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 1
+    },
+    {
+      "case": "udp-mode4-ap1",
+      "ppdus": 288,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode4-ap2",
+      "ppdus": 288,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode4-ont",
+      "ppdus": 262,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 1
+    },
+    {
+      "case": "udp-mode5-ap1",
+      "ppdus": 535,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode5-ap2",
+      "ppdus": 788,
+      "packets": 125,
+      "goodputMbps": 9.99,
+      "hops": 3
+    },
+    {
+      "case": "udp-mode5-ap2-obss",
+      "ppdus": 824,
+      "packets": 126,
+      "goodputMbps": 10.02,
+      "hops": 3
+    },
+    {
+      "case": "udp-mode5-ont",
+      "ppdus": 266,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 1
+    },
+    {
+      "case": "udp-mode6-ap1",
+      "ppdus": 292,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode6-ap2",
+      "ppdus": 563,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 3
+    },
+    {
+      "case": "udp-mode6-ap2-unaggregated-partial-bin",
+      "ppdus": 1050,
+      "packets": 125,
+      "goodputMbps": 10.0114,
+      "hops": 3
+    },
+    {
+      "case": "udp-mode6-ont",
+      "ppdus": 264,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 1
+    },
+    {
+      "case": "udp-mode7-ap1",
+      "ppdus": 530,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode7-ap2",
+      "ppdus": 530,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 3
+    },
+    {
+      "case": "udp-mode7-ont",
+      "ppdus": 265,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 1
+    },
+    {
+      "case": "udp-mode8-ap1",
+      "ppdus": 288,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 2
+    },
+    {
+      "case": "udp-mode8-ap2",
+      "ppdus": 288,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 3
+    },
+    {
+      "case": "udp-mode8-ont",
+      "ppdus": 262,
+      "packets": 125,
+      "goodputMbps": 10.02,
+      "hops": 1
+    }
+  ],
+  "captureCap": "passed",
+  "instrumentationInvariance": "passed"
+}

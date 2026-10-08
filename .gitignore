@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+/build/
+/cmake-cache/
+/meshviz-results/
+*.jsonl
+!doc/example.jsonl
