@@ -694,7 +694,10 @@ MeshvizWindow::MeshvizWindow(const QString& file)
         PpduVisualItem v{};
         v.id = number(o, "id");
         v.nodeId = o["node"].toInt();
-        v.linkId = o["device"].toInt();
+        // MLO: recorder emits a per-link "link" field (one MLD device has one
+        // if-index but N links). Prefer it; fall back to device index so
+        // single-link traces keep the upstream behaviour.
+        v.linkId = o.contains("link") ? o["link"].toInt() : o["device"].toInt();
         v.nodeMac = number(o, "sender");
         v.sender = number(o, "sender");
         v.receiver = number(o, "receiver");
@@ -894,71 +897,122 @@ MeshvizWindow::drawTopology()
         children[e["from"].toInt()].append(e["to"].toInt());
         targets.insert(e["to"].toInt());
     }
-    QVector<int> queue;
+    // Prefer real simulation coordinates when every node carries them
+    // (recorder emits x/y from the node's MobilityModel). Fall back to the
+    // BFS layer layout when any node lacks them (e.g. doc/example.jsonl).
+    bool useRealPos = !m_nodes.isEmpty();
+    double minX = 0, minY = 0, maxX = 0, maxY = 0;
     for (auto id : m_nodes.keys())
     {
-        if (!targets.contains(id))
+        auto n = m_nodes[id];
+        if (!n.contains("x") || !n.contains("y"))
         {
-            depth[id] = 0;
-            queue.append(id);
+            useRealPos = false;
+            break;
         }
+        double x = n["x"].toDouble(), y = n["y"].toDouble();
+        if (id == m_nodes.firstKey())
+        {
+            minX = maxX = x;
+            minY = maxY = y;
+        }
+        minX = std::min(minX, x);
+        maxX = std::max(maxX, x);
+        minY = std::min(minY, y);
+        maxY = std::max(maxY, y);
     }
-    for (int i = 0; i < queue.size(); ++i)
+    // Degenerate layout (no mobility set / all coincident): keep BFS.
+    if (useRealPos && maxX - minX < 1e-6 && maxY - minY < 1e-6)
     {
-        for (int next : children.value(queue[i]))
-        {
-            if (!depth.contains(next))
-            {
-                depth[next] = depth[queue[i]] + 1;
-                queue.append(next);
-            }
-        }
+        useRealPos = false;
     }
     QMap<int, QPointF> pos;
-    QSet<int> visiting;
-    double nextRow = 0;
-    std::function<double(int)> place = [&](int id) -> double {
-        if (pos.contains(id))
-        {
-            return pos[id].y();
-        }
-        if (visiting.contains(id))
-        {
-            return nextRow * 155;
-        }
-        visiting.insert(id);
-        auto kids = children.value(id);
-        double y = 0;
-        if (kids.isEmpty())
-        {
-            y = 110 + 155 * nextRow++;
-        }
-        else
-        {
-            double first = place(kids.first()), last = first;
-            for (int k = 1; k < kids.size(); ++k)
-            {
-                last = place(kids[k]);
-            }
-            y = (first + last) / 2;
-        }
-        pos[id] = QPointF(100 + depth.value(id, 0) * 290, y);
-        visiting.remove(id);
-        return y;
-    };
-    for (auto id : m_nodes.keys())
+    if (useRealPos)
     {
-        if (!targets.contains(id))
+        // Map the simulation bounding box onto the canvas area the BFS layout
+        // uses, preserving aspect ratio and centering it.
+        const double spanX = maxX - minX, spanY = maxY - minY;
+        const double targetW = 1100, targetH = 780;
+        double scale = std::max(spanX, spanY) > 0
+                           ? std::min(targetW / std::max(spanX, 1e-9), targetH / std::max(spanY, 1e-9))
+                           : 1.0;
+        scale = std::min(scale, 290.0); // cap: tiny sims should not blow up
+        QPointF offset(150 + (targetW - spanX * scale) / 2 - minX * scale,
+                       120 + (targetH - spanY * scale) / 2 - minY * scale);
+        for (auto id : m_nodes.keys())
         {
-            place(id);
-            nextRow += 0.35;
+            auto n = m_nodes[id];
+            pos[id] = QPointF(n["x"].toDouble() * scale + offset.x(),
+                              n["y"].toDouble() * scale + offset.y());
         }
     }
-    for (auto id : m_nodes.keys())
+    if (!useRealPos)
     {
-        if (!pos.contains(id))
+        QVector<int> queue;
+        for (auto id : m_nodes.keys())
         {
-            place(id);
+            if (!targets.contains(id))
+            {
+                depth[id] = 0;
+                queue.append(id);
+            }
+        }
+        for (int i = 0; i < queue.size(); ++i)
+        {
+            for (int next : children.value(queue[i]))
+            {
+                if (!depth.contains(next))
+                {
+                    depth[next] = depth[queue[i]] + 1;
+                    queue.append(next);
+                }
+            }
+        }
+        QSet<int> visiting;
+        double nextRow = 0;
+        std::function<double(int)> place = [&](int id) -> double {
+            if (pos.contains(id))
+            {
+                return pos[id].y();
+            }
+            if (visiting.contains(id))
+            {
+                return nextRow * 155;
+            }
+            visiting.insert(id);
+            auto kids = children.value(id);
+            double y = 0;
+            if (kids.isEmpty())
+            {
+                y = 110 + 155 * nextRow++;
+            }
+            else
+            {
+                double first = place(kids.first()), last = first;
+                for (int k = 1; k < kids.size(); ++k)
+                {
+                    last = place(kids[k]);
+                }
+                y = (first + last) / 2;
+            }
+            pos[id] = QPointF(100 + depth.value(id, 0) * 290, y);
+            visiting.remove(id);
+            return y;
+        };
+        for (auto id : m_nodes.keys())
+        {
+            if (!targets.contains(id))
+            {
+                place(id);
+                nextRow += 0.35;
+            }
+        }
+        for (auto id : m_nodes.keys())
+        {
+            if (!pos.contains(id))
+            {
+                place(id);
+            }
         }
     }
 
@@ -973,7 +1027,20 @@ MeshvizWindow::drawTopology()
         QPen pen(c,
                  id == m_activeHop ? 5 : (m_selectedHops.contains(id) ? 3.5 : 2),
                  e["wireless"].toBool() ? Qt::DashLine : Qt::SolidLine);
-        scene->addLine(QLineF(a + QPointF(42, 0), b - QPointF(42, 0)), pen);
+        // Trim endpoints along the line direction so the wire starts/ends at
+        // the node edge regardless of layout (horizontal BFS or real coords).
+        QLineF wire(a, b);
+        if (wire.length() > 100)
+        {
+            wire.setLength(wire.length() - 50);
+            QPointF dir = wire.unitVector().p2() - wire.p1();
+            QPointF startA = wire.p1() + dir * 50;
+            scene->addLine(QLineF(startA, wire.p2()), pen);
+        }
+        else
+        {
+            scene->addLine(wire, pen);
+        }
         auto* text = scene->addText(
             QString("%1 · hop %2").arg(e["wireless"].toBool() ? "Wi-Fi" : "Ethernet").arg(id));
         text->setDefaultTextColor(c);

@@ -105,13 +105,15 @@ class MeshvizHelper
     static void Originate(MeshvizHelper*, const Ipv4Header&, Ptr<const Packet>, uint32_t);
     static void IpTx(MeshvizHelper*, Ptr<const Packet>, Ptr<Ipv4>, uint32_t);
     static void IpRx(MeshvizHelper*, Ptr<const Packet>, Ptr<Ipv4>, uint32_t);
-    static void PhyTx(MeshvizHelper*, Ptr<WifiNetDevice>, WifiConstPsduMap, WifiTxVector, double);
+    static void PhyTx(MeshvizHelper*, Ptr<WifiNetDevice>, uint8_t linkId, WifiConstPsduMap, WifiTxVector, double);
     static void RxDrop(MeshvizHelper*,
                        Ptr<WifiNetDevice>,
+                       uint8_t linkId,
                        Ptr<const WifiPpdu>,
                        WifiPhyRxfailureReason);
     static void RxOutcome(MeshvizHelper*,
                           Ptr<WifiNetDevice>,
+                          uint8_t linkId,
                           Ptr<const WifiPpdu>,
                           RxSignalInfo,
                           const WifiTxVector&,

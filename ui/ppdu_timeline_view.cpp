@@ -740,7 +740,7 @@ static QVector<ChannelStateSegment> buildChannelStateSegments(
 
 PpduTimelineView::PpduTimelineView(QWidget *parent)
     : QWidget(parent),
-      m_rowMode(TimelineRowMode::BySender),
+      m_rowMode(TimelineRowMode::ByNodeLink), // MLO: group lanes by node+link, not sender MAC
       m_viewMode(TimelineViewMode::PpduTimeline)
 {
     setMouseTracking(true);
@@ -879,6 +879,73 @@ QString PpduTimelineView::nodeRoleLabel(uint16_t nodeId) const
         }
     }
     return QString("%1 %2").arg(deviceRoleName(role)).arg(nodeId);
+}
+
+// Human-readable band name inferred from the operating channel number.
+// 2.4 GHz band: ch 1-14; 5 GHz band: ch 32-177; 6 GHz band: ch 1-233 of
+// the 6 GHz range (ns-3 uses channel numbers >= 1 within each band, so
+// disambiguate 2.4G vs 6G by the channel the recorder reported it on is
+// not possible from the number alone: prefer the PPDU's own band context).
+static QString bandNameFromChannel(int channel)
+{
+    if (channel >= 1 && channel <= 14)
+        return "2.4G";
+    if (channel >= 32 && channel <= 177)
+        return "5G";
+    return "6G";
+}
+
+// Peer node of a lane: the most frequent receiver MAC on this lane's
+// (node, link) pair that maps to a registered node, shown by its name.
+QString PpduTimelineView::lanePeerLabel(uint16_t nodeId, uint8_t linkId) const
+{
+    // Under MLO every link transmits with its own link-local MAC, which is
+    // NOT the registered MLD address in m_deviceInfoMap. But each lane's
+    // sender MAC IS that link-local address, so build a sender-MAC -> node
+    // map from all items and resolve voted receivers (the peer's link-local
+    // address) through it. m_deviceInfoMap alone cannot resolve them, and
+    // its default DeviceNodeInfo{nodeId=0} once mapped every unknown MAC to
+    // the AP (node 0), producing "AP-2.4G-AP" labels.
+    QHash<uint64_t, uint16_t> senderNode;
+    QHash<uint64_t, int> votes;
+    const uint64_t kBroadcast = 0xFFFFFFFFFFFFULL;
+    for (const auto &item : m_ppduItems)
+    {
+        if (item.recordType != RecordType::Ppdu)
+            continue;
+        if (item.sender != 0)
+            senderNode.insert(item.sender, item.nodeId);
+        if (item.nodeId != nodeId || item.linkId != linkId)
+            continue;
+        // Skip broadcast/multicast receivers (beacons, ARP requests...).
+        if (item.receiver == kBroadcast || (item.receiver & 0x1000000000000ULL))
+            continue;
+        if (item.sender == item.receiver)
+            continue;
+        votes[item.receiver]++;
+    }
+    uint64_t best = 0;
+    int bestCount = 0;
+    for (auto it = votes.cbegin(); it != votes.cend(); ++it)
+    {
+        if (it.value() > bestCount)
+        {
+            bestCount = it.value();
+            best = it.key();
+        }
+    }
+    if (!best)
+        return QString();
+    uint16_t peer = senderNode.value(best, 0xFFFF);
+    if (peer == 0xFFFF)
+    {
+        if (!m_deviceInfoMap.contains(best))
+            return QString();
+        peer = m_deviceInfoMap.value(best).nodeId;
+    }
+    if (m_nodeLabels.contains(peer))
+        return m_nodeLabels.value(peer);
+    return QString();
 }
 
 uint16_t PpduTimelineView::nodeIdForMac(uint64_t mac) const
@@ -1284,10 +1351,16 @@ void PpduTimelineView::rebuildPpduLayoutCache()
 	            if (idx >= 0 && idx < m_ppduItems.size())
 	            {
 	                const auto& item = m_ppduItems[idx];
-	                row.label = QString("%1 / L%2 / CH%3")
-	                                .arg(nodeRoleLabel(item.nodeId))
-	                                .arg(item.linkId)
-	                                .arg(item.channel_number);
+	                // Label: NodeName-Band-PeerNode (e.g. ONT-2.4G-AP1). Fall back
+	                // to the raw link-id form when the peer is unknown.
+	                const QString band = bandNameFromChannel(item.channel_number);
+	                const QString peer = lanePeerLabel(item.nodeId, item.linkId);
+	                row.label = peer.isEmpty()
+	                                ? QString("%1-%2-L%3")
+	                                      .arg(nodeRoleLabel(item.nodeId), band)
+	                                      .arg(item.linkId)
+	                                : QString("%1-%2-%3")
+	                                      .arg(nodeRoleLabel(item.nodeId), band, peer);
 	            }
 	            else
 	            {
@@ -1398,12 +1471,16 @@ void PpduTimelineView::rebuildPhyStateCache()
         {
             row = m_cachedPhyStateRows.size();
             rowMap.insert(key, row);
+            const QString band = bandNameFromChannel(item.channel_number);
+            const QString peer = lanePeerLabel(item.nodeId, item.linkId);
             m_cachedPhyStateRows.push_back(
                 CachedPhyStateRow{key,
-                                  QString("%1 / L%2 / CH%3")
-                                      .arg(nodeRoleLabel(item.nodeId))
-                                      .arg(item.linkId)
-                                      .arg(item.channel_number),
+                                  peer.isEmpty()
+                                      ? QString("%1-%2-L%3")
+                                            .arg(nodeRoleLabel(item.nodeId), band)
+                                            .arg(item.linkId)
+                                      : QString("%1-%2-%3")
+                                            .arg(nodeRoleLabel(item.nodeId), band, peer),
                                   item.nodeId,
                                   item.linkId,
                                   item.channel_number,
@@ -3362,7 +3439,7 @@ void PpduTimelineView::resetPage()
     m_lastRangeX = 0;
 
     /* ===== view mode ===== */
-    m_rowMode = TimelineRowMode::BySender;
+    m_rowMode = TimelineRowMode::ByNodeLink; // MLO: node+link lanes
     m_viewMode = TimelineViewMode::PpduTimeline;
 
     /* ===== overlays ===== */

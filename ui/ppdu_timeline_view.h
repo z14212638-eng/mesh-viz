@@ -169,6 +169,7 @@ private:
     DeviceRole deviceRoleForNode(uint16_t nodeId) const;
     QString nodeRoleLabel(uint16_t nodeId) const;
     uint16_t nodeIdForMac(uint64_t mac) const;
+    QString lanePeerLabel(uint16_t nodeId, uint8_t linkId) const;
     QColor senderColor(uint64_t mac) const;
 
     /* ===== logic ===== */
